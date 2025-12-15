@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: ai-content-platform-backend
+    env: node
+    buildCommand: npm install
+    startCommand: node index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+    # Note: Add other environment variables in Render dashboard
+

@@ -1,61 +1,174 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../utils/api';
 
-const BACKGROUND_MUSIC_OPTIONS = [
-  { id: 'trending1', name: 'Trending Sound #1', description: 'Popular TikTok sound' },
-  { id: 'trending2', name: 'Trending Sound #2', description: 'Viral audio track' },
-  { id: 'upbeat', name: 'Upbeat Energy', description: 'High-energy background' },
-  { id: 'chill', name: 'Chill Vibes', description: 'Relaxed atmosphere' },
-  { id: 'dramatic', name: 'Dramatic Tension', description: 'Suspenseful music' },
-];
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:9999/api';
 
-const BACKGROUND_VIDEO_OPTIONS = [
-  { id: 'minecraft_parkour', name: 'Minecraft Parkour', description: 'Popular gaming content' },
-  { id: 'subway_surfers', name: 'Subway Surfers', description: 'Classic mobile game' },
-  { id: 'abstract', name: 'Abstract Motion', description: 'Modern visual effects' },
-  { id: 'nature', name: 'Nature Scenes', description: 'Beautiful landscapes' },
-  { id: 'city', name: 'City Life', description: 'Urban environment' },
+const BACKGROUND_VIDEOS = [
+  { id: 'subway_surfers_QPW3XwBoQlw', name: 'Subway Surfers #1', description: 'Classic gameplay', thumb: `${API_URL}/media/static/youtube/subway_surfers/thumb_QPW3XwBoQlw.jpg` },
+  { id: 'subway_surfers_i0M4ARe9v0Y', name: 'Subway Surfers #2', description: 'Long run gameplay', thumb: `${API_URL}/media/static/youtube/subway_surfers/thumb_i0M4ARe9v0Y.jpg` },
+  { id: 'subway_surfers_tiktok_7453104964236266774', name: 'Subway Surfers #3', description: 'TikTok clip', thumb: `${API_URL}/media/static/youtube/subway_surfers/thumb_tiktok.jpg` },
 ];
 
 function VideoCreator({ content, onVideoCreated }) {
+  
+  useEffect(() => {
+    if (content) {
+      localStorage.setItem('selectedContent', JSON.stringify(content));
+    }
+  }, [content]);
   const [backgroundMusic, setBackgroundMusic] = useState('');
-  const [backgroundVideo, setBackgroundVideo] = useState('');
+  const [backgroundVideo, setBackgroundVideo] = useState(BACKGROUND_VIDEOS[0].id);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [videoPreviews, setVideoPreviews] = useState({});
-  const [previewingVideo, setPreviewingVideo] = useState(null);
   const [progress, setProgress] = useState({ message: '', percent: 0 });
   const progressIntervalRef = useRef(null);
-
-  // Load video preview URLs
+  
+  const [tiktokSounds, setTiktokSounds] = useState([]);
+  const [loadingSounds, setLoadingSounds] = useState(true);
+  const [playingSound, setPlayingSound] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const audioRefs = useRef({});
+  
+  const [isEditingStory, setIsEditingStory] = useState(false);
+  const [editedStory, setEditedStory] = useState('');
+  
   useEffect(() => {
-    const loadPreviews = async () => {
-      const previews = {};
-      for (const video of BACKGROUND_VIDEO_OPTIONS) {
-        try {
-          const result = await api.getVideoPreview(video.id);
-          previews[video.id] = result.previewUrl;
-        } catch (err) {
-          console.error(`Failed to load preview for ${video.id}:`, err);
+    if (content) {
+      const storyText = content.generatedText || content.generated_text || '';
+      setEditedStory(storyText);
+    }
+  }, [content]);
+
+  useEffect(() => {
+    const loadTrendingSounds = async () => {
+      try {
+        setLoadingSounds(true);
+        const response = await api.getTrendingSounds(20);
+        if (response.success && response.data) {
+          setTiktokSounds(response.data);
+        } else {
+          console.error('Failed to load TikTok sounds:', response);
         }
+      } catch (err) {
+        console.error('Error loading TikTok sounds:', err);
+        setError('Failed to load TikTok sounds. Using fallback options.');
+        
+        setTiktokSounds([
+          { id: 'chill', title: 'Chill Vibes', author: 'Default', duration: 30, cover_url: null, play_url: null },
+          { id: 'upbeat', title: 'Upbeat Energy', author: 'Default', duration: 30, cover_url: null, play_url: null },
+        ]);
+      } finally {
+        setLoadingSounds(false);
       }
-      setVideoPreviews(previews);
     };
-    loadPreviews();
+    loadTrendingSounds();
   }, []);
 
-  // Cleanup interval on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(audioRefs.current).forEach(audio => {
+        if (audio) {
+          audio.pause();
+          audio.src = '';
+        }
+      });
+    };
+  }, []);
+
   useEffect(() => {
     return () => {
       if (progressIntervalRef.current) {
         clearInterval(progressIntervalRef.current);
       }
+      
+      Object.values(audioRefs.current).forEach(audio => {
+        if (audio) {
+          audio.pause();
+          audio.src = '';
+        }
+      });
     };
   }, []);
 
+  const handleSoundPreview = (sound) => {
+    
+    if (playingSound && audioRefs.current[playingSound]) {
+      audioRefs.current[playingSound].pause();
+      audioRefs.current[playingSound].currentTime = 0;
+    }
+
+    if (playingSound === sound.id) {
+      setPlayingSound(null);
+      return;
+    }
+
+    if (sound.play_url) {
+      const audio = new Audio(sound.play_url);
+      audio.volume = 0.5; 
+      audioRefs.current[sound.id] = audio;
+      
+      audio.addEventListener('error', (err) => {
+        console.error('Audio playback error:', err);
+        setError('Could not play sound preview. The audio may be blocked by CORS or unavailable.');
+        setPlayingSound(null);
+      });
+      
+      audio.addEventListener('canplaythrough', () => {
+        
+        audio.play().catch(err => {
+          console.error('Error playing sound:', err);
+          setError('Could not play sound preview. Please try again.');
+          setPlayingSound(null);
+        });
+      });
+      
+      audio.addEventListener('ended', () => {
+        setPlayingSound(null);
+      });
+      
+      audio.load();
+      setPlayingSound(sound.id);
+    } else {
+      
+      setError('Preview not available for this sound. TikTok API may not provide preview URLs in sandbox mode. You can still select this sound.');
+      setTimeout(() => setError(''), 3000); 
+    }
+  };
+
+  const handleSearchSounds = async () => {
+    if (!searchQuery.trim()) {
+      
+      try {
+        setLoadingSounds(true);
+        const response = await api.getTrendingSounds(20);
+        if (response.success && response.data) {
+          setTiktokSounds(response.data);
+        }
+      } catch (err) {
+        console.error('Error loading sounds:', err);
+      } finally {
+        setLoadingSounds(false);
+      }
+      return;
+    }
+
+    try {
+      setLoadingSounds(true);
+      const response = await api.searchTikTokSounds(searchQuery, 20);
+      if (response.success && response.data) {
+        setTiktokSounds(response.data);
+      }
+    } catch (err) {
+      console.error('Error searching sounds:', err);
+      setError('Failed to search sounds. Please try again.');
+    } finally {
+      setLoadingSounds(false);
+    }
+  };
+
   const handleCreateVideo = async () => {
-    if (!backgroundMusic || !backgroundVideo) {
-      setError('Please select both background music and video');
+    if (!backgroundMusic) {
+      setError('Please select background music');
       return;
     }
 
@@ -63,26 +176,44 @@ function VideoCreator({ content, onVideoCreated }) {
     setLoading(true);
     setProgress({ message: 'Starting video creation...', percent: 0 });
 
-    // Clear any existing interval
     if (progressIntervalRef.current) {
       clearInterval(progressIntervalRef.current);
     }
 
     try {
-      // Start video creation (non-blocking)
+      
+      if (editedStory && editedStory !== (content.generatedText || content.generated_text)) {
+        try {
+          await api.updateContent(content.id, { generated_text: editedStory });
+          
+          content.generatedText = editedStory;
+          content.generated_text = editedStory;
+        } catch (err) {
+          console.error('Error updating story:', err);
+          
+        }
+      }
+      
       await api.createVideo(content.id, backgroundMusic, backgroundVideo);
       
-      // Start polling for progress updates immediately (with initial poll)
       const pollProgress = async () => {
         try {
           const progressData = await api.getVideoProgress(content.id);
-          console.log('Progress update:', progressData);
           setProgress({
             message: progressData.message || 'Processing...',
             percent: progressData.percent !== null && progressData.percent !== undefined ? progressData.percent : 0
           });
 
-          // If progress is 100%, video is complete
+          if (progressData.message && progressData.message.toLowerCase().includes('error')) {
+            if (progressIntervalRef.current) {
+              clearInterval(progressIntervalRef.current);
+              progressIntervalRef.current = null;
+            }
+            setError(progressData.message);
+            setLoading(false);
+            return;
+          }
+
           if (progressData.percent === 100) {
             if (progressIntervalRef.current) {
               clearInterval(progressIntervalRef.current);
@@ -95,16 +226,13 @@ function VideoCreator({ content, onVideoCreated }) {
             return;
           }
         } catch (err) {
-          // Progress polling failed, but video creation might still be running
           console.error('Error polling progress:', err);
         }
       };
       
-      // Poll immediately, then set interval
       pollProgress();
-      progressIntervalRef.current = setInterval(pollProgress, 500); // Poll every 500ms
+      progressIntervalRef.current = setInterval(pollProgress, 500); 
 
-      // Cleanup interval after 5 minutes (safety timeout)
       setTimeout(() => {
         if (progressIntervalRef.current) {
           clearInterval(progressIntervalRef.current);
@@ -127,79 +255,203 @@ function VideoCreator({ content, onVideoCreated }) {
         <h2 className="text-3xl font-bold text-gray-900 mb-2">Create Video</h2>
         <p className="text-gray-600 mb-8">Select background music and video for your content</p>
 
-        {/* Generated Story Preview */}
+        {/* Generated Story Preview - Editable */}
         <div className="mb-8 p-6 bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg border border-purple-200">
-          <h3 className="text-lg font-semibold text-gray-900 mb-3">Your Story</h3>
-          <p className="text-gray-700 text-sm line-clamp-4">{content.generatedText}</p>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-lg font-semibold text-gray-900">Your Story</h3>
+            <button
+              onClick={() => setIsEditingStory(!isEditingStory)}
+              className="text-sm text-purple-600 hover:text-purple-700 font-medium flex items-center gap-1"
+            >
+              {isEditingStory ? (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  Done Editing
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                  Edit Story
+                </>
+              )}
+            </button>
+          </div>
+          {isEditingStory ? (
+            <textarea
+              value={editedStory}
+              onChange={(e) => setEditedStory(e.target.value)}
+              className="w-full px-4 py-3 border border-purple-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white text-gray-700 min-h-[150px]"
+              placeholder="Enter your story..."
+            />
+          ) : (
+            <p className="text-gray-700 text-sm whitespace-pre-wrap">{editedStory || content.generatedText || content.generated_text || 'No story available'}</p>
+          )}
         </div>
 
-        {/* Background Music Selection */}
+        {/* Background Music Selection - TikTok Sounds */}
         <div className="mb-8">
-          <h3 className="text-xl font-semibold text-gray-900 mb-4">Select Background Music</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {BACKGROUND_MUSIC_OPTIONS.map((music) => (
-              <div
-                key={music.id}
-                onClick={() => setBackgroundMusic(music.id)}
-                className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
-                  backgroundMusic === music.id
-                    ? 'border-purple-600 bg-purple-50'
-                    : 'border-gray-200 hover:border-purple-300'
-                }`}
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xl font-semibold text-gray-900">Select Background Music</h3>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                placeholder="Search sounds..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleSearchSounds()}
+                className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+              />
+              <button
+                onClick={handleSearchSounds}
+                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm font-medium"
               >
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="font-semibold text-gray-900">{music.name}</h4>
-                  {backgroundMusic === music.id && (
-                    <svg className="w-5 h-5 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
-                  )}
-                </div>
-                <p className="text-sm text-gray-600">{music.description}</p>
-              </div>
-            ))}
+                Search
+              </button>
+            </div>
           </div>
+
+          {loadingSounds ? (
+            <div className="text-center py-8">
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+              <p className="mt-2 text-gray-600">Loading trending sounds...</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {tiktokSounds.length > 0 ? (
+                tiktokSounds.map((sound) => (
+                  <div
+                    key={sound.id}
+                    className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                      backgroundMusic === sound.id
+                        ? 'border-purple-600 bg-purple-50'
+                        : 'border-gray-200 hover:border-purple-300'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex-1">
+                        <h4 className="font-semibold text-gray-900 mb-1">{sound.title || 'Untitled'}</h4>
+                        <p className="text-xs text-gray-500 mb-2">by {sound.author || 'Unknown'}</p>
+                        {sound.duration && (
+                          <p className="text-xs text-gray-400">{Math.round(sound.duration)}s</p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {/* Play/Pause Button - Always clickable */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSoundPreview(sound);
+                          }}
+                          className={`p-2 rounded-full transition-colors ${
+                            sound.play_url 
+                              ? playingSound === sound.id
+                                ? 'bg-purple-200 hover:bg-purple-300'
+                                : 'bg-purple-100 hover:bg-purple-200'
+                              : 'bg-gray-100 hover:bg-gray-200'
+                          }`}
+                          title={
+                            sound.play_url
+                              ? playingSound === sound.id 
+                                ? 'Stop preview' 
+                                : 'Preview sound'
+                              : 'Click to try preview (may not be available)'
+                          }
+                        >
+                          {sound.play_url && playingSound === sound.id ? (
+                            <svg className="w-4 h-4 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                            </svg>
+                          ) : (
+                            <svg className={`w-4 h-4 ${sound.play_url ? 'text-purple-600' : 'text-gray-400'}`} fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+                            </svg>
+                          )}
+                        </button>
+                        {/* Selection Checkmark */}
+                        {backgroundMusic === sound.id && (
+                          <svg className="w-5 h-5 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                          </svg>
+                        )}
+                      </div>
+                    </div>
+                    {/* Cover Image if available */}
+                    {sound.cover_url && (
+                      <div className="mt-2 rounded overflow-hidden bg-gray-100">
+                        <img 
+                          src={sound.cover_url} 
+                          alt={sound.title}
+                          className="w-full h-24 object-cover"
+                          onError={(e) => {
+                            
+                            e.target.style.display = 'none';
+                            
+                            const parent = e.target.parentElement;
+                            if (parent) {
+                              parent.innerHTML = '<div class="w-full h-24 bg-gradient-to-br from-purple-200 to-pink-200 flex items-center justify-center"><svg class="w-8 h-8 text-purple-400" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 3a1 1 0 00-1.447-.894L8.763 6H5a3 3 0 000 6h.28l1.771 5.316A1 1 0 008 18h1a1 1 0 001-1v-4.382l6.553 3.276A1 1 0 0018 15V3z" clipRule="evenodd" /></svg></div>';
+                            }
+                          }}
+                        />
+                      </div>
+                    )}
+                    <button
+                      onClick={() => setBackgroundMusic(sound.id)}
+                      className="mt-3 w-full text-sm text-purple-600 hover:text-purple-700 font-medium"
+                    >
+                      {backgroundMusic === sound.id ? 'Selected' : 'Select this sound'}
+                    </button>
+                  </div>
+                ))
+              ) : (
+                <div className="col-span-full text-center py-8 text-gray-500">
+                  No sounds found. Try a different search term.
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Background Video Selection */}
         <div className="mb-8">
-          <h3 className="text-xl font-semibold text-gray-900 mb-4">Select Background Video</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {BACKGROUND_VIDEO_OPTIONS.map((video) => (
-              <div
+          <h3 className="text-xl font-semibold text-gray-900 mb-4">Background Video</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {BACKGROUND_VIDEOS.map((video) => (
+              <div 
                 key={video.id}
-                className={`relative border-2 rounded-lg cursor-pointer transition-all overflow-hidden ${
-                  backgroundVideo === video.id
-                    ? 'border-purple-600 bg-purple-50'
-                    : 'border-gray-200 hover:border-purple-300'
-                }`}
                 onClick={() => setBackgroundVideo(video.id)}
-                onMouseEnter={() => setPreviewingVideo(video.id)}
-                onMouseLeave={() => setPreviewingVideo(null)}
+                className={`cursor-pointer border-2 rounded-lg overflow-hidden transition-all ${
+                  backgroundVideo === video.id 
+                    ? 'border-purple-600 bg-purple-50 ring-2 ring-purple-300' 
+                    : 'border-gray-200 hover:border-purple-400'
+                }`}
               >
-                {videoPreviews[video.id] && (
-                  <div className="relative w-full h-48 bg-black">
-                    <video
-                      src={videoPreviews[video.id]}
+                <div className="relative w-full h-32 bg-black">
+                  {video.thumb ? (
+                    <img
+                      src={video.thumb}
+                      alt={video.name}
                       className="w-full h-full object-cover"
-                      muted
-                      loop
-                      autoPlay={previewingVideo === video.id}
-                      playsInline
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                  </div>
-                )}
-                <div className="p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="font-semibold text-gray-900">{video.name}</h4>
-                    {backgroundVideo === video.id && (
-                      <svg className="w-5 h-5 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-purple-500 to-pink-500">
+                      <span className="text-white text-4xl">🎮</span>
+                    </div>
+                  )}
+                  {backgroundVideo === video.id && (
+                    <div className="absolute top-2 right-2 bg-purple-600 rounded-full p-1">
+                      <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                       </svg>
-                    )}
-                  </div>
-                  <p className="text-sm text-gray-600">{video.description}</p>
+                    </div>
+                  )}
+                </div>
+                <div className="p-3">
+                  <h4 className="font-semibold text-gray-900 text-sm">{video.name}</h4>
+                  <p className="text-xs text-gray-500">{video.description}</p>
                 </div>
               </div>
             ))}
@@ -216,9 +468,6 @@ function VideoCreator({ content, onVideoCreated }) {
           <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
             <div className="flex items-center justify-between mb-2">
               <p className="text-blue-800 font-medium">{progress.message || 'Processing...'}</p>
-              <span className="text-blue-600 text-sm font-semibold">
-                {Math.round(progress.percent || 0)}%
-              </span>
             </div>
             <div className="w-full bg-blue-200 rounded-full h-2">
               <div
@@ -231,7 +480,7 @@ function VideoCreator({ content, onVideoCreated }) {
 
         <button
           onClick={handleCreateVideo}
-          disabled={loading || !backgroundMusic || !backgroundVideo}
+          disabled={loading || !backgroundMusic}
           className="w-full py-3 px-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold rounded-lg hover:from-purple-700 hover:to-pink-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
         >
           {loading ? (
@@ -252,6 +501,3 @@ function VideoCreator({ content, onVideoCreated }) {
 }
 
 export default VideoCreator;
-
-
-

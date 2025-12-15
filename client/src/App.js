@@ -12,13 +12,30 @@ function App() {
   const [selectedContent, setSelectedContent] = useState(null);
 
   useEffect(() => {
-    // Check if user is logged in
+    
     const token = localStorage.getItem('token');
     const userData = localStorage.getItem('user');
     if (token && userData) {
       setUser(JSON.parse(userData));
     }
+
+    const savedContent = localStorage.getItem('selectedContent');
+    if (savedContent) {
+      try {
+        setSelectedContent(JSON.parse(savedContent));
+      } catch (e) {
+        console.error('Error parsing saved content:', e);
+      }
+    }
   }, []);
+
+  useEffect(() => {
+    if (selectedContent) {
+      localStorage.setItem('selectedContent', JSON.stringify(selectedContent));
+    } else {
+      localStorage.removeItem('selectedContent');
+    }
+  }, [selectedContent]);
 
   const handleLogin = (userData, token) => {
     localStorage.setItem('token', token);
@@ -29,6 +46,8 @@ function App() {
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    localStorage.removeItem('selectedContent');
+    localStorage.removeItem('generatedContent');
     setUser(null);
     setCurrentView('dashboard');
     setSelectedContent(null);
@@ -109,6 +128,7 @@ function App() {
               setSelectedContent(content);
               setCurrentView('create-video');
             }}
+            savedContent={selectedContent}
           />
         )}
         {currentView === 'create-video' && selectedContent && (

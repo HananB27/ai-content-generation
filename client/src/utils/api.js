@@ -9,7 +9,7 @@ const getAuthHeaders = () => {
 };
 
 export const api = {
-  // Auth
+  
   async register(email, password) {
     const response = await fetch(`${API_BASE_URL}/auth/register`, {
       method: 'POST',
@@ -28,7 +28,6 @@ export const api = {
     return response.json();
   },
 
-  // Content
   async generateContent(prompt) {
     const response = await fetch(`${API_BASE_URL}/content/generate`, {
       method: 'POST',
@@ -45,7 +44,15 @@ export const api = {
     return response.json();
   },
 
-  // Videos
+  async updateContent(contentId, updates) {
+    const response = await fetch(`${API_BASE_URL}/content/${contentId}`, {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(updates),
+    });
+    return response.json();
+  },
+
   async createVideo(contentId, backgroundMusic, backgroundVideo) {
     const response = await fetch(`${API_BASE_URL}/videos/create`, {
       method: 'POST',
@@ -69,7 +76,6 @@ export const api = {
     return response.json();
   },
 
-  // Accounts
   async getConnectedAccounts() {
     const response = await fetch(`${API_BASE_URL}/accounts`, {
       headers: getAuthHeaders(),
@@ -103,7 +109,6 @@ export const api = {
     return response.json();
   },
 
-  // Publish
   async publishVideo(contentId, platforms, title, description, tags) {
     const response = await fetch(`${API_BASE_URL}/publish`, {
       method: 'POST',
@@ -120,10 +125,53 @@ export const api = {
     return response.json();
   },
 
-  // Media
+  async deleteTikTokVideo(videoId) {
+    const response = await fetch(`${API_BASE_URL}/publish/tiktok/${videoId}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+    });
+    return response.json();
+  },
+
   async getVideoPreview(videoId) {
     const response = await fetch(`${API_BASE_URL}/media/preview/${videoId}`);
     return response.json();
   },
-};
 
+  async getTrendingSounds(limit = 20) {
+    const response = await fetch(`${API_BASE_URL}/tiktok/sounds/trending?limit=${limit}`, {
+      headers: getAuthHeaders(),
+    });
+    return response.json();
+  },
+
+  async searchTikTokSounds(query, limit = 20) {
+    const response = await fetch(`${API_BASE_URL}/tiktok/sounds/search?query=${encodeURIComponent(query)}&limit=${limit}`, {
+      headers: getAuthHeaders(),
+    });
+    return response.json();
+  },
+
+  async getSoundDetails(soundId) {
+    const response = await fetch(`${API_BASE_URL}/tiktok/sounds/${soundId}`, {
+      headers: getAuthHeaders(),
+    });
+    return response.json();
+  },
+
+  async generateAIVideo(prompt, autoPublish = false) {
+    const response = await fetch(`${API_BASE_URL}/ai-generate/video`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ prompt, autoPublish }),
+    });
+    return response.json();
+  },
+
+  async getAIGenerationProgress(progressId) {
+    const response = await fetch(`${API_BASE_URL}/ai-generate/progress/${progressId}`, {
+      headers: getAuthHeaders(),
+    });
+    return response.json();
+  },
+};

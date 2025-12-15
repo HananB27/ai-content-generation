@@ -1,12 +1,41 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { api } from '../utils/api';
 
-function ContentGenerator({ onContentGenerated }) {
+function ContentGenerator({ onContentGenerated, savedContent }) {
   const [prompt, setPrompt] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [generatedContent, setGeneratedContent] = useState(null);
   const [approved, setApproved] = useState(false);
+
+  useEffect(() => {
+    
+    const saved = localStorage.getItem('generatedContent');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        setGeneratedContent(parsed);
+        
+        if (parsed.approved) {
+          setApproved(true);
+        }
+      } catch (e) {
+        console.error('Error parsing saved content:', e);
+      }
+    } else if (savedContent) {
+      
+      setGeneratedContent(savedContent);
+    }
+  }, [savedContent]);
+
+  useEffect(() => {
+    if (generatedContent) {
+      localStorage.setItem('generatedContent', JSON.stringify({
+        ...generatedContent,
+        approved: approved
+      }));
+    }
+  }, [generatedContent, approved]);
 
   const examplePrompts = [
     "Generate me a reddit like story post where a student is trying to get into a large company that his professor owns but hates him",
@@ -30,7 +59,7 @@ function ContentGenerator({ onContentGenerated }) {
         setError(result.error);
       } else {
         setGeneratedContent(result);
-        setApproved(false); // Reset approval when new content is generated
+        setApproved(false); 
       }
     } catch (err) {
       setError('Failed to generate content. Please try again.');
@@ -42,14 +71,25 @@ function ContentGenerator({ onContentGenerated }) {
   const handleApprove = () => {
     if (generatedContent) {
       setApproved(true);
-      onContentGenerated(generatedContent);
+      
+      const contentToPass = {
+        ...generatedContent,
+        generatedText: generatedContent.generatedText || generatedContent.generated_text,
+        generated_text: generatedContent.generated_text || generatedContent.generatedText,
+        approved: true
+      };
+      
+      localStorage.setItem('generatedContent', JSON.stringify(contentToPass));
+      onContentGenerated(contentToPass);
     }
   };
 
   const handleRegenerate = () => {
     setGeneratedContent(null);
     setApproved(false);
-    // Optionally keep the prompt or clear it
+    
+    localStorage.removeItem('generatedContent');
+    
   };
 
   return (
@@ -116,7 +156,10 @@ function ContentGenerator({ onContentGenerated }) {
         {generatedContent && !approved && (
           <div className="mt-8 p-6 bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg border-2 border-purple-300 shadow-lg">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-semibold text-gray-900">Preview Generated Story</h3>
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900">Preview Generated Story</h3>
+                <p className="text-sm text-gray-600 mt-1">Your previously generated content has been restored</p>
+              </div>
               <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm font-semibold">
                 Review & Approve
               </span>
@@ -163,7 +206,13 @@ function ContentGenerator({ onContentGenerated }) {
               </svg>
               <h3 className="text-lg font-semibold text-green-800">Content Approved!</h3>
             </div>
-            <p className="text-green-700">Proceeding to video creation...</p>
+            <p className="text-green-700 mb-4">Your content is ready. Click below to proceed to video creation.</p>
+            <button
+              onClick={() => onContentGenerated(generatedContent)}
+              className="px-6 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 transition-all font-medium shadow-md"
+            >
+              Continue to Video Creation
+            </button>
           </div>
         )}
       </div>
@@ -172,6 +221,3 @@ function ContentGenerator({ onContentGenerated }) {
 }
 
 export default ContentGenerator;
-
-
-

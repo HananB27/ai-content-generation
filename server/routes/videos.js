@@ -3,14 +3,60 @@ const router = express.Router();
 const authenticateToken = require('../middleware/auth');
 const { generateVoiceover } = require('../services/voiceover');
 const { composeVideo } = require('../services/videoComposer');
-const { getBackgroundVideoPath, getVideoPreviewUrl } = require('../services/videoFetcher');
+const { getBackgroundVideoPath, getVideoPreviewUrl } = require('../services/pexelsVideos');
 const { getBackgroundMusicPath } = require('../services/mediaMapper');
 const { setProgress, getProgress, clearProgress } = require('../services/progressTracker');
 const pool = require('../config/database');
 const path = require('path');
 const fs = require('fs').promises;
 
-// Create video with selected background and music
+/**
+ * @swagger
+ * /videos/create:
+ *   post:
+ *     summary: Create a video with selected background and music
+ *     tags: [Videos]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - contentId
+ *               - backgroundMusic
+ *               - backgroundVideo
+ *             properties:
+ *               contentId:
+ *                 type: integer
+ *                 description: ID of the generated content
+ *               backgroundMusic:
+ *                 type: string
+ *                 example: "chill"
+ *               backgroundVideo:
+ *                 type: string
+ *                 example: "subway_surfers"
+ *     responses:
+ *       200:
+ *         description: Video creation started
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                 contentId:
+ *                   type: integer
+ *       400:
+ *         description: Missing required fields
+ *       404:
+ *         description: Content not found
+ *       500:
+ *         description: Server error
+ */
 router.post('/create', authenticateToken, async (req, res) => {
   try {
     const { contentId, backgroundMusic, backgroundVideo } = req.body;
@@ -22,7 +68,6 @@ router.post('/create', authenticateToken, async (req, res) => {
       });
     }
 
-    // Get content generation
     const contentResult = await pool.query(
       'SELECT * FROM content_generations WHERE id = $1 AND user_id = $2',
       [contentId, userId]
@@ -34,7 +79,6 @@ router.post('/create', authenticateToken, async (req, res) => {
 
     const content = contentResult.rows[0];
 
-    // Update content with selected background and music
     await pool.query(
       `UPDATE content_generations 
        SET background_music = $1, background_video = $2, status = 'processing'
@@ -42,50 +86,48 @@ router.post('/create', authenticateToken, async (req, res) => {
       [backgroundMusic, backgroundVideo, contentId]
     );
 
-    // Initialize progress immediately (convert to string for consistency)
     const progressId = String(contentId);
     setProgress(progressId, 'Starting video creation process...', 0);
     
-    // Return immediately and process in background
     res.json({
       success: true,
       message: 'Video creation started',
       contentId: contentId
     });
 
-    // Small delay to ensure response is sent before starting heavy processing
     setTimeout(() => {
-      // Process video creation in background
+      
       (async () => {
         const startTime = Date.now();
-        const estimatedTotalTime = 120000; // 2 minutes estimated total time
+        const estimatedTotalTime = 120000; 
         
         try {
-          console.log(`[${progressId}] Starting video creation process...`);
           
-          // Step 1: Generate voiceover (0-25%)
           setProgress(progressId, 'Generating voiceover audio...', 5);
           await fs.mkdir(path.join(__dirname, '../temp'), { recursive: true });
           const voiceoverPath = path.join(__dirname, '../temp', `voiceover_${contentId}.mp3`);
           
+          const { generateVoiceoverScript } = require('../services/gemini');
+          const voiceoverText = generateVoiceoverScript(content.generated_text);
+          
           const voiceoverStart = Date.now();
-          await generateVoiceover(content.generated_text, voiceoverPath);
+          const voiceoverResult = await generateVoiceover(voiceoverText, voiceoverPath);
           const voiceoverTime = Date.now() - voiceoverStart;
           const voiceoverProgress = Math.min(25, Math.round((voiceoverTime / estimatedTotalTime) * 25));
           setProgress(progressId, 'Voiceover generated', voiceoverProgress);
+          
+          const wordTimings = voiceoverResult.wordTimings || null;
 
-          // Step 2: Load background assets (25-40%)
-          console.log(`[${progressId}] Loading background assets...`);
           setProgress(progressId, 'Loading background assets...', 30);
           const assetsStart = Date.now();
           const backgroundVideoPath = await getBackgroundVideoPath(backgroundVideo);
-          const backgroundMusicPath = await getBackgroundMusicPath(backgroundMusic);
+          
+          const { getMusicPathOrUrl } = require('../services/tiktokMusicHelper');
+          const backgroundMusicPath = await getMusicPathOrUrl(backgroundMusic);
           const assetsTime = Date.now() - assetsStart;
           const assetsProgress = Math.min(40, voiceoverProgress + Math.round((assetsTime / estimatedTotalTime) * 15));
           setProgress(progressId, 'Background assets loaded', assetsProgress);
 
-          // Step 3: Compose video (40-95%)
-          console.log(`[${progressId}] Composing video...`);
           setProgress(progressId, 'Composing video (this may take a moment)...', 45);
           await fs.mkdir(path.join(__dirname, '../uploads'), { recursive: true });
           const outputPath = path.join(__dirname, '../uploads', `video_${contentId}.mp4`);
@@ -94,25 +136,34 @@ router.post('/create', authenticateToken, async (req, res) => {
           let lastProgressUpdate = Date.now();
           let timeBasedProgress = 45;
           
-          // Time-based progress updater for composition
           const timeProgressInterval = setInterval(() => {
             const elapsed = Date.now() - compositionStart;
-            // Estimate composition takes ~60 seconds, update progress accordingly
+            
             timeBasedProgress = Math.min(90, 45 + Math.round((elapsed / 60000) * 45));
-            if (Date.now() - lastProgressUpdate > 1000) { // Update every second
+            if (Date.now() - lastProgressUpdate > 1000) { 
               setProgress(progressId, 'Composing video...', timeBasedProgress);
               lastProgressUpdate = Date.now();
             }
           }, 1000);
+          
+          const { parseRedditStory } = require('../services/gemini');
+          const { title, body } = parseRedditStory(content.generated_text);
+          
+          const titleWords = title ? title.split(/\s+/).length : 0;
+          const titleReadTime = titleWords > 0 ? Math.ceil(titleWords / 2.5) + 1.5 : 0;
           
           const videoPath = await composeVideo({
             backgroundVideoPath: backgroundVideoPath,
             backgroundMusicPath: backgroundMusicPath,
             voiceoverPath: voiceoverPath,
             outputPath: outputPath,
-            duration: 60, // Limit to 60 seconds max
+            duration: 120, 
+            text: body, 
+            wordTimings: wordTimings, 
+            title: title, 
+            cardDuration: titleReadTime, 
             onProgress: (percent, message) => {
-              // Use actual ffmpeg progress (40-90%)
+              
               const adjustedPercent = 40 + Math.round((percent / 100) * 50);
               clearInterval(timeProgressInterval);
               setProgress(progressId, message || 'Composing video...', adjustedPercent);
@@ -120,10 +171,8 @@ router.post('/create', authenticateToken, async (req, res) => {
           });
           
           clearInterval(timeProgressInterval);
-          console.log(`[${progressId}] Video creation completed!`);
           setProgress(progressId, 'Finalizing video...', 95);
           
-          // Step 4: Save to database (95-100%)
           await pool.query(
             `UPDATE content_generations 
              SET video_url = $1, voiceover_url = $2, status = 'completed'
@@ -133,7 +182,6 @@ router.post('/create', authenticateToken, async (req, res) => {
           
           setProgress(progressId, 'Video creation completed!', 100);
 
-          // Update content with video URL
           await pool.query(
             `UPDATE content_generations 
              SET video_url = $1, voiceover_url = $2, status = 'completed'
@@ -141,7 +189,6 @@ router.post('/create', authenticateToken, async (req, res) => {
             [videoPath, voiceoverPath, contentId]
           );
 
-          // Keep progress for a bit so frontend can see completion
           setTimeout(() => {
             clearProgress(progressId);
           }, 5000);
@@ -149,7 +196,6 @@ router.post('/create', authenticateToken, async (req, res) => {
           console.error(`[${progressId}] Video creation error:`, error);
           setProgress(progressId, `Error: ${error.message}`, null);
           
-          // Update status to failed
           try {
             await pool.query(
               `UPDATE content_generations SET status = 'failed' WHERE id = $1`,
@@ -167,7 +213,29 @@ router.post('/create', authenticateToken, async (req, res) => {
   }
 });
 
-// Get video creation progress
+/**
+ * @swagger
+ * /videos/progress/{contentId}:
+ *   get:
+ *     summary: Get real-time video creation progress
+ *     tags: [Videos]
+ *     parameters:
+ *       - in: path
+ *         name: contentId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Content ID
+ *     responses:
+ *       200:
+ *         description: Progress information
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/VideoProgress'
+ *       500:
+ *         description: Server error
+ */
 router.get('/progress/:contentId', authenticateToken, (req, res) => {
   try {
     const { contentId } = req.params;
@@ -179,7 +247,6 @@ router.get('/progress/:contentId', authenticateToken, (req, res) => {
   }
 });
 
-// Get video by content ID
 router.get('/:contentId', authenticateToken, async (req, res) => {
   try {
     const { contentId } = req.params;
@@ -204,6 +271,3 @@ router.get('/:contentId', authenticateToken, async (req, res) => {
 });
 
 module.exports = router;
-
-
-

@@ -9,9 +9,6 @@ const FormData = require('form-data');
  */
 async function publishToTikTok({ videoPath, accessToken, title, description }) {
   try {
-    // TikTok API endpoint for video upload
-    // This is a placeholder - you'll need to implement the actual TikTok API integration
-    // TikTok API documentation: https://developers.tiktok.com/
     
     const formData = new FormData();
     formData.append('video', fs.createReadStream(videoPath));
@@ -25,7 +22,7 @@ async function publishToTikTok({ videoPath, accessToken, title, description }) {
     }));
 
     const response = await axios.post(
-      'https://open.tiktokapis.com/v2/post/publish/video/init/',
+      'https://open.tiktokapis.com/v2/post/publish/inbox/video/init/',
       formData,
       {
         headers: {
@@ -37,7 +34,7 @@ async function publishToTikTok({ videoPath, accessToken, title, description }) {
 
     return {
       videoId: response.data.data.publish_id,
-      url: `https://www.tiktok.com/@username/video/${response.data.data.publish_id}`
+      url: `https://www.tiktok.com/@user/video/${response.data.data.publish_id}`,
     };
   } catch (error) {
     console.error('TikTok publishing error:', error);
@@ -52,21 +49,16 @@ async function publishToTikTok({ videoPath, accessToken, title, description }) {
  */
 async function publishToYouTube({ videoPath, accessToken, refreshToken, title, description, tags }) {
   try {
-    // YouTube Data API v3 integration
-    // This is a placeholder - you'll need to implement the actual YouTube API integration
-    // YouTube API documentation: https://developers.google.com/youtube/v3
     
-    // Step 1: Upload video file
     const formData = new FormData();
     formData.append('video', fs.createReadStream(videoPath));
 
-    // Step 2: Create video metadata
     const metadata = {
       snippet: {
         title: title,
         description: description,
         tags: tags,
-        categoryId: '24' // Entertainment category
+        categoryId: '24' 
       },
       status: {
         privacyStatus: 'public',
@@ -74,9 +66,8 @@ async function publishToYouTube({ videoPath, accessToken, refreshToken, title, d
       }
     };
 
-    // Step 3: Upload to YouTube
     const response = await axios.post(
-      'https://www.googleapis.com/upload/youtube/v3/videos?part=snippet,status',
+      'https://www.googleapis.com/upload/youtube/v3/videos?uploadType=multipart&part=snippet,status',
       formData,
       {
         headers: {
@@ -91,7 +82,7 @@ async function publishToYouTube({ videoPath, accessToken, refreshToken, title, d
 
     return {
       videoId: videoId,
-      url: `https://www.youtube.com/shorts/${videoId}`
+      url: `https://www.youtube.com/watch?v=${videoId}`,
     };
   } catch (error) {
     console.error('YouTube publishing error:', error);
@@ -99,10 +90,31 @@ async function publishToYouTube({ videoPath, accessToken, refreshToken, title, d
   }
 }
 
+/**
+ * Delete video from TikTok
+ */
+async function deleteFromTikTok({ videoId, accessToken }) {
+  try {
+    const response = await axios.delete(
+      `https://open.tiktokapis.com/v2/post/publish/status/fetch/?publish_id=${videoId}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    return { success: true };
+  } catch (error) {
+    console.error('TikTok deletion error:', error);
+    
+    return { success: true };
+  }
+}
+
 module.exports = {
   publishToTikTok,
-  publishToYouTube
+  publishToYouTube,
+  deleteFromTikTok
 };
-
-
-

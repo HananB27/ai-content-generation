@@ -5,13 +5,12 @@ dotenv.config();
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false } // Neon requires SSL connections
+  ssl: { rejectUnauthorized: false } 
 });
 
-// Initialize database tables
 const initializeDatabase = async () => {
   try {
-    // Users table
+    
     await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
@@ -21,7 +20,6 @@ const initializeDatabase = async () => {
       )
     `);
 
-    // Content generations table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS content_generations (
         id SERIAL PRIMARY KEY,
@@ -37,7 +35,6 @@ const initializeDatabase = async () => {
       )
     `);
 
-    // Connected accounts table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS connected_accounts (
         id SERIAL PRIMARY KEY,
@@ -53,7 +50,6 @@ const initializeDatabase = async () => {
       )
     `);
 
-    // Published videos table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS published_videos (
         id SERIAL PRIMARY KEY,
@@ -73,9 +69,6 @@ const initializeDatabase = async () => {
   }
 };
 
-// Initialize on module load
 initializeDatabase();
 
 module.exports = pool;
-
-

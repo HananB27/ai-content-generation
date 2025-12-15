@@ -6,24 +6,32 @@ dotenv.config();
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 /**
- * Generate story content based on user prompt
+ * Generate Reddit-style story content with title and body
  */
 async function generateStory(prompt) {
   try {
-    // Use gemini-2.5-flash for fast generation, or gemini-2.5-pro for better quality
     const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
     
-    const systemPrompt = `You are a creative content writer specializing in engaging, viral-worthy stories for social media platforms like TikTok and YouTube Shorts. 
-    Generate a compelling story based on the user's request. The story should be:
-    - Engaging and attention-grabbing
-    - Appropriate for short-form video content (1-3 minutes when read)
-    - Have a clear narrative arc
-    - Be suitable for voiceover narration
-    - Include natural pauses and dramatic moments
-    
-    User request: ${prompt}
-    
-    Generate the story text now:`;
+    const systemPrompt = `You are a Reddit storyteller creating viral AITA, TIFU, relationship, or revenge stories for TikTok/YouTube Shorts.
+
+FORMAT YOUR RESPONSE EXACTLY LIKE THIS:
+TITLE: [A catchy Reddit-style title, 10-15 words max]
+
+[The full story in first person, conversational tone]
+
+RULES:
+- Title must be dramatic and hook-worthy (e.g., "My boss fired me for being 2 minutes late, so I exposed his affair to his wife")
+- Story should be 200-400 words, perfect for 1-2 minute video
+- Write in first person, casual Reddit style
+- Include drama, conflict, plot twists, or satisfying revenge
+- NO stage directions, NO "(laughs)", NO "[pause]", NO asterisks
+- NO emojis in the story text
+- Make it feel like a real Reddit post that went viral
+- End with a satisfying conclusion or cliffhanger
+
+User request: ${prompt}
+
+Generate the Reddit story now:`;
 
     const result = await model.generateContent(systemPrompt);
     const response = await result.response;
@@ -37,23 +45,43 @@ async function generateStory(prompt) {
 }
 
 /**
- * Generate voiceover script with timing and pauses
+ * Parse Reddit-style story into title and body
+ */
+function parseRedditStory(storyText) {
+  
+  const titleMatch = storyText.match(/TITLE:\s*(.+?)(?:\n|$)/i);
+  let title = titleMatch ? titleMatch[1].trim() : '';
+  
+  if (title && !title.match(/[.!?]$/)) {
+    title = title + '.';
+  }
+  
+  let body = storyText;
+  if (titleMatch) {
+    body = storyText.substring(storyText.indexOf(titleMatch[0]) + titleMatch[0].length);
+  }
+  
+  body = body.replace(/\([^)]*\)/g, ''); 
+  body = body.replace(/\*/g, ''); 
+  body = body.replace(/\s+/g, ' ').trim();
+  
+  return { title, body };
+}
+
+/**
+ * Clean voiceover script - title (without TITLE: prefix) + body
  */
 function generateVoiceoverScript(storyText) {
-  // Add natural pauses and breaks for better narration
-  const script = storyText
-    .replace(/\. /g, '. [PAUSE] ')
-    .replace(/\! /g, '! [PAUSE] ')
-    .replace(/\? /g, '? [PAUSE] ')
-    .replace(/\n\n/g, '\n[LONG_PAUSE]\n');
+  const { title, body } = parseRedditStory(storyText);
   
-  return script;
+  if (title) {
+    return `${title} ${body}`;
+  }
+  return body;
 }
 
 module.exports = {
   generateStory,
-  generateVoiceoverScript
+  generateVoiceoverScript,
+  parseRedditStory
 };
-
-
-

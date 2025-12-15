@@ -1,11 +1,11 @@
-// In-memory progress tracker (for production, use Redis or database)
 const progressStore = new Map();
 
-function setProgress(contentId, message, percent = null) {
+function setProgress(contentId, message, percent = null, metadata = {}) {
   progressStore.set(contentId, {
     message,
     percent,
-    timestamp: Date.now()
+    timestamp: Date.now(),
+    ...metadata
   });
 }
 
@@ -22,4 +22,3 @@ module.exports = {
   getProgress,
   clearProgress
 };
-

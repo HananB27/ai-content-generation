@@ -21,11 +21,10 @@ function AccountSettings() {
   };
 
   const handleConnectTikTok = () => {
-    // In production, this would redirect to TikTok OAuth
-    // For now, show instructions
+    
     alert(
       'TikTok OAuth Integration:\n\n' +
-      '1. Register your app at https://developers.tiktok.com/\n' +
+      '1. Register your app at https://developers.tiktok.com\n' +
       '2. Get Client Key and Client Secret\n' +
       '3. Implement OAuth flow\n' +
       '4. Call the connect endpoint with tokens'
@@ -33,8 +32,7 @@ function AccountSettings() {
   };
 
   const handleConnectYouTube = () => {
-    // In production, this would redirect to YouTube OAuth
-    // For now, show instructions
+    
     alert(
       'YouTube OAuth Integration:\n\n' +
       '1. Create a project in Google Cloud Console\n' +
@@ -172,6 +170,3 @@ function AccountSettings() {
 }
 
 export default AccountSettings;
-
-
-

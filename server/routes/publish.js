@@ -1,10 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const authenticateToken = require('../middleware/auth');
-const { publishToTikTok, publishToYouTube } = require('../services/publisher');
+const { publishToTikTok, publishToYouTube, deleteFromTikTok } = require('../services/publisher');
 const pool = require('../config/database');
 
-// Publish video to platforms
 router.post('/', authenticateToken, async (req, res) => {
   try {
     const { contentId, platforms, title, description, tags } = req.body;
@@ -16,7 +15,6 @@ router.post('/', authenticateToken, async (req, res) => {
       });
     }
 
-    // Get content generation with video
     const contentResult = await pool.query(
       'SELECT * FROM content_generations WHERE id = $1 AND user_id = $2',
       [contentId, userId]
@@ -34,10 +32,9 @@ router.post('/', authenticateToken, async (req, res) => {
 
     const results = [];
 
-    // Publish to each platform
     for (const platform of platforms) {
       try {
-        // Get account connection
+        
         const accountResult = await pool.query(
           'SELECT * FROM connected_accounts WHERE user_id = $1 AND platform = $2',
           [userId, platform]
@@ -80,7 +77,6 @@ router.post('/', authenticateToken, async (req, res) => {
           continue;
         }
 
-        // Save published video record
         await pool.query(
           `INSERT INTO published_videos 
            (content_generation_id, user_id, platform, platform_video_id, title, description)
@@ -118,7 +114,6 @@ router.post('/', authenticateToken, async (req, res) => {
   }
 });
 
-// Get published videos
 router.get('/my-videos', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.userId;
@@ -139,7 +134,46 @@ router.get('/my-videos', authenticateToken, async (req, res) => {
   }
 });
 
+router.delete('/tiktok/:videoId', authenticateToken, async (req, res) => {
+  try {
+    const { videoId } = req.params;
+    const userId = req.user.userId;
+
+    const videoResult = await pool.query(
+      `SELECT pv.*, ca.access_token
+       FROM published_videos pv
+       JOIN connected_accounts ca ON pv.user_id = ca.user_id AND ca.platform = 'tiktok'
+       WHERE pv.id = $1 AND pv.user_id = $2 AND pv.platform = 'tiktok'`,
+      [videoId, userId]
+    );
+
+    if (videoResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Published video not found' });
+    }
+
+    const publishedVideo = videoResult.rows[0];
+
+    const { deleteFromTikTok } = require('../services/publisher');
+    try {
+      await deleteFromTikTok({
+        videoId: publishedVideo.platform_video_id,
+        accessToken: publishedVideo.access_token
+      });
+    } catch (error) {
+      console.error('Error deleting from TikTok:', error);
+      
+    }
+
+    await pool.query(
+      'DELETE FROM published_videos WHERE id = $1',
+      [videoId]
+    );
+
+    res.json({ success: true, message: 'Video deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting video:', error);
+    res.status(500).json({ error: 'Failed to delete video' });
+  }
+});
+
 module.exports = router;
-
-
-

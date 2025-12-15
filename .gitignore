@@ -4,11 +4,28 @@ node_modules/
 .DS_Store
 dist/
 build/
-*.log
 .vscode/
 .idea/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Logs
+logs.txt
+*.log
+
+# Temporary files and uploads
 server/uploads/
 server/temp/
+server/temp/*.png
+server/temp/*.mp3
+
+# Media files (too large for git)
+server/media/
+!server/media/.gitkeep
 
 
 

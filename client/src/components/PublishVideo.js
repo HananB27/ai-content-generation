@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '../utils/api';
 
 function PublishVideo({ content, onPublished }) {
@@ -15,25 +15,20 @@ function PublishVideo({ content, onPublished }) {
   const [videoUrl, setVideoUrl] = useState(null);
   const [loadingVideo, setLoadingVideo] = useState(true);
 
-  useEffect(() => {
-    loadAccounts();
-    loadVideoUrl();
-  }, []);
-
-  const loadVideoUrl = async () => {
+  const loadVideoUrl = useCallback(async () => {
     try {
       setLoadingVideo(true);
-      // Get video URL from content
+      
       let videoPath = content.video_url;
       
       if (!videoPath) {
-        // Try to fetch video info
+        
         const videoInfo = await api.getVideo(content.id);
         videoPath = videoInfo.video_url;
       }
       
       if (videoPath) {
-        // Extract filename from path (handle both absolute and relative paths)
+        
         const filename = videoPath.split('/').pop() || videoPath.split('\\').pop();
         const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:9999/api';
         const videoStreamUrl = `${API_BASE}/videos/stream/${filename}`;
@@ -44,7 +39,12 @@ function PublishVideo({ content, onPublished }) {
     } finally {
       setLoadingVideo(false);
     }
-  };
+  }, [content]);
+
+  useEffect(() => {
+    loadAccounts();
+    loadVideoUrl();
+  }, [loadVideoUrl]);
 
   const loadAccounts = async () => {
     try {
@@ -118,7 +118,7 @@ function PublishVideo({ content, onPublished }) {
               <video
                 src={videoUrl}
                 controls
-                className="w-full h-full object-contain"
+                className="w-full min-h-full object-contain"
                 style={{ maxHeight: '600px' }}
                 preload="metadata"
               >
@@ -303,6 +303,3 @@ function PublishVideo({ content, onPublished }) {
 }
 
 export default PublishVideo;
-
-
-

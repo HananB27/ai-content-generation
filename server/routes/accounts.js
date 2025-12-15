@@ -3,7 +3,6 @@ const router = express.Router();
 const authenticateToken = require('../middleware/auth');
 const pool = require('../config/database');
 
-// Get connected accounts
 router.get('/', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.userId;
@@ -22,7 +21,6 @@ router.get('/', authenticateToken, async (req, res) => {
   }
 });
 
-// Connect TikTok account
 router.post('/tiktok/connect', authenticateToken, async (req, res) => {
   try {
     const { accessToken, refreshToken, accountId, username } = req.body;
@@ -32,7 +30,6 @@ router.post('/tiktok/connect', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Access token and account ID are required' });
     }
 
-    // Save or update TikTok connection
     await pool.query(
       `INSERT INTO connected_accounts (user_id, platform, access_token, refresh_token, account_id, account_username)
        VALUES ($1, 'tiktok', $2, $3, $4, $5)
@@ -48,7 +45,6 @@ router.post('/tiktok/connect', authenticateToken, async (req, res) => {
   }
 });
 
-// Connect YouTube account
 router.post('/youtube/connect', authenticateToken, async (req, res) => {
   try {
     const { accessToken, refreshToken, accountId, username } = req.body;
@@ -58,7 +54,6 @@ router.post('/youtube/connect', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Access token and account ID are required' });
     }
 
-    // Save or update YouTube connection
     await pool.query(
       `INSERT INTO connected_accounts (user_id, platform, access_token, refresh_token, account_id, account_username)
        VALUES ($1, 'youtube', $2, $3, $4, $5)
@@ -74,7 +69,6 @@ router.post('/youtube/connect', authenticateToken, async (req, res) => {
   }
 });
 
-// Disconnect account
 router.delete('/:platform', authenticateToken, async (req, res) => {
   try {
     const { platform } = req.params;
@@ -93,6 +87,3 @@ router.delete('/:platform', authenticateToken, async (req, res) => {
 });
 
 module.exports = router;
-
-
-

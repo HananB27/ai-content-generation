@@ -6,6 +6,18 @@ const { swaggerUi, swaggerSpec } = require('./config/swagger');
 
 dotenv.config();
 
+// Setup YouTube OAuth configuration if not already present
+if (!process.env.YOUTUBE_CLIENT_ID || !process.env.YOUTUBE_CLIENT_SECRET) {
+  console.warn('YouTube OAuth is not configured. Set YOUTUBE_CLIENT_ID and YOUTUBE_CLIENT_SECRET in .env');
+}
+if (!process.env.YOUTUBE_REDIRECT_URI) {
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+  process.env.YOUTUBE_REDIRECT_URI = `${frontendUrl}/youtube-callback`;
+  console.log(`Setting default YouTube redirect URI to: ${process.env.YOUTUBE_REDIRECT_URI}`);
+}
+
+console.log(process.env.NODE_ENV);
+
 const app = express();
 const PORT = process.env.PORT || 9999;
 

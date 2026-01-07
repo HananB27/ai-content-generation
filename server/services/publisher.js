@@ -1,6 +1,34 @@
 const axios = require('axios');
-const fs = require('fs');
+const fs = require("fs");              // streams, existsSync, constants
+const fsp = require("fs/promises");    // async/await file ops
 const FormData = require('form-data');
+const dotenv = require('dotenv');
+
+// Load environment variables
+dotenv.config();
+
+// YouTube API configuration
+const YOUTUBE_CLIENT_ID = process.env.YOUTUBE_CLIENT_ID;
+const YOUTUBE_CLIENT_SECRET = process.env.YOUTUBE_CLIENT_SECRET;
+
+/**
+ * Refresh the YouTube access token if it's expired
+ */
+async function refreshYouTubeToken(refreshToken) {
+  try {
+    const response = await axios.post('https://oauth2.googleapis.com/token', {
+      client_id: YOUTUBE_CLIENT_ID,
+      client_secret: YOUTUBE_CLIENT_SECRET,
+      refresh_token: refreshToken,
+      grant_type: 'refresh_token'
+    });
+
+    return response.data.access_token;
+  } catch (error) {
+    console.error('Error refreshing YouTube token:', error);
+    throw new Error('Could not refresh YouTube access token');
+  }
+}
 
 /**
  * Publish video to TikTok
@@ -9,7 +37,7 @@ const FormData = require('form-data');
  */
 async function publishToTikTok({ videoPath, accessToken, title, description }) {
   try {
-    
+
     const formData = new FormData();
     formData.append('video', fs.createReadStream(videoPath));
     formData.append('post_info', JSON.stringify({
@@ -44,49 +72,123 @@ async function publishToTikTok({ videoPath, accessToken, title, description }) {
 
 /**
  * Publish video to YouTube Shorts
- * Note: This is a placeholder implementation
- * You'll need to implement actual YouTube Data API v3 integration
+ * Implementation using YouTube Data API v3 for uploading shorts videos
  */
 async function publishToYouTube({ videoPath, accessToken, refreshToken, title, description, tags }) {
   try {
-    
-    const formData = new FormData();
-    formData.append('video', fs.createReadStream(videoPath));
+    // Validate video exists
+    console.log(videoPath)
 
+    await fsp.access(videoPath);
+
+    // Try to use the provided token, but refresh it if needed
+    let validToken = accessToken;
+    try {
+      // Attempt a small API call to check token validity
+      await axios.get('https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true', {
+        headers: { 'Authorization': `Bearer ${accessToken}` }
+      });
+    } catch (tokenError) {
+      if (tokenError.response && tokenError.response.status === 401 && refreshToken) {
+        console.log('YouTube token expired, attempting to refresh');
+        validToken = await refreshYouTubeToken(refreshToken);
+      } else {
+        throw tokenError;
+      }
+    }
+
+    // Create FormData
+    const formData = new FormData();
+
+    // Add video metadata
     const metadata = {
       snippet: {
         title: title,
-        description: description,
-        tags: tags,
-        categoryId: '24' 
+        description: `${description}\n\n#Shorts`,
+        tags: [...(tags || []), 'Shorts'],
+        categoryId: '22' // People & Blogs category
       },
       status: {
         privacyStatus: 'public',
-        madeForKids: false
+        selfDeclaredMadeForKids: false
       }
     };
 
+    // Converting metadata to JSON string
+    const metadataBuffer = Buffer.from(JSON.stringify(metadata));
+
+    // Append parts to the form data
+    formData.append('metadata', metadataBuffer, {
+      contentType: 'application/json',
+      knownLength: metadataBuffer.length
+    });
+
+    // Append the video file
+    const videoStream = fs.createReadStream(videoPath);
+    formData.append('media', videoStream, {
+      contentType: 'video/mp4'
+    });
+
+    // Calculate the multipart boundary
+    const boundary = formData.getBoundary();
+
+    // Make the upload request
     const response = await axios.post(
       'https://www.googleapis.com/upload/youtube/v3/videos?uploadType=multipart&part=snippet,status',
       formData,
       {
         headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'multipart/related',
-          ...formData.getHeaders()
-        }
+          'Authorization': `Bearer ${validToken}`,
+          'Content-Type': `multipart/related; boundary=${boundary}`,
+        },
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity
       }
     );
 
     const videoId = response.data.id;
 
+    // If upload successful, attempt to set Shorts specific metadata
+    try {
+      // Add #Shorts hashtag to the description if not already present
+      if (!description.includes('#Shorts')) {
+        await axios.put(
+          `https://www.googleapis.com/youtube/v3/videos?part=snippet`,
+          {
+            id: videoId,
+            snippet: {
+              ...response.data.snippet,
+              description: `${description}\n\n#Shorts`,
+              tags: [...(tags || []), 'Shorts']
+            }
+          },
+          {
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+      }
+    } catch (updateError) {
+      console.warn('Could not update Shorts hashtag:', updateError.message);
+      // Continue anyway, video is already uploaded
+    }
+
+    // Return video details
     return {
       videoId: videoId,
-      url: `https://www.youtube.com/watch?v=${videoId}`,
+      url: `https://www.youtube.com/shorts/${videoId}`,
     };
   } catch (error) {
     console.error('YouTube publishing error:', error);
-    throw new Error(`Failed to publish to YouTube: ${error.message}`);
+
+    // Provide more detailed error message
+    const errorMessage = error.response?.data?.error?.message ||
+                        error.response?.data?.error ||
+                        error.message;
+
+    throw new Error(`Failed to publish to YouTube: ${errorMessage}`);
   }
 }
 
@@ -108,7 +210,7 @@ async function deleteFromTikTok({ videoId, accessToken }) {
     return { success: true };
   } catch (error) {
     console.error('TikTok deletion error:', error);
-    
+
     return { success: true };
   }
 }
@@ -116,5 +218,6 @@ async function deleteFromTikTok({ videoId, accessToken }) {
 module.exports = {
   publishToTikTok,
   publishToYouTube,
-  deleteFromTikTok
+  deleteFromTikTok,
+  refreshYouTubeToken
 };

@@ -5,6 +5,7 @@ import ContentGenerator from './components/ContentGenerator';
 import VideoCreator from './components/VideoCreator';
 import PublishVideo from './components/PublishVideo';
 import AccountSettings from './components/AccountSettings';
+import {handleYouTubeCallback} from "./utils/youtubeOAuth";
 
 function App() {
   const [user, setUser] = useState(null);
@@ -36,6 +37,26 @@ function App() {
       localStorage.removeItem('selectedContent');
     }
   }, [selectedContent]);
+
+  useEffect(() => {
+    const connectYouTubeAccount = async () => {
+      try {
+        // Get the code from URL query parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const code = urlParams.get('code');
+
+        if (!code) {
+          throw new Error('No authorization code provided');
+        }
+
+        const result = await handleYouTubeCallback(code);
+
+      } catch (err) {
+      }
+    };
+
+    connectYouTubeAccount();
+  }, []);
 
   const handleLogin = (userData, token) => {
     localStorage.setItem('token', token);

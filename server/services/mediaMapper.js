@@ -26,7 +26,7 @@ async function generatePlaceholderVideo(id, outputPath) {
   const color = colors[id] || '0x2196F3';
   const name = id.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
   
-  const ffmpegPath = '/opt/homebrew/bin/ffmpeg';
+  const ffmpegPath = '/usr/bin/ffmpeg';
   const command = `${ffmpegPath} -f lavfi -i color=c=${color}:size=1080x1920:duration=10 -vf "drawtext=text='${name}':fontsize=60:fontcolor=white:x=(w-text_w)/2:y=(h-text_h)/2" -c:v libx264 -preset fast -crf 23 -pix_fmt yuv420p "${outputPath}"`;
   
   try {
@@ -42,7 +42,7 @@ async function generatePlaceholderVideo(id, outputPath) {
  * Generate a placeholder audio file (silence)
  */
 async function generatePlaceholderAudio(id, outputPath) {
-  const ffmpegPath = '/opt/homebrew/bin/ffmpeg';
+  const ffmpegPath = '/usr/bin/ffmpeg';
   
   const outputDir = path.dirname(outputPath);
   await fs.mkdir(outputDir, { recursive: true });

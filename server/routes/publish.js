@@ -60,6 +60,37 @@ router.post('/', authenticateToken, async (req, res) => {
             description: description || content.generated_text.substring(0, 200)
           });
         } else if (platform === 'youtube') {
+          // Check if video has proper dimensions for YouTube Shorts
+          const ffmpeg = require('fluent-ffmpeg');
+          const getVideoInfo = (videoPath) => {
+            return new Promise((resolve, reject) => {
+              ffmpeg.ffprobe(videoPath, (err, metadata) => {
+                if (err) return reject(err);
+                resolve(metadata);
+              });
+            });
+          };
+          
+          try {
+            const metadata = await getVideoInfo(content.video_url);
+            const videoStream = metadata.streams.find(s => s.codec_type === 'video');
+            
+            if (videoStream) {
+              const width = videoStream.width;
+              const height = videoStream.height;
+              const duration = parseFloat(videoStream.duration);
+              
+              // Ensure video meets YouTube Shorts criteria (vertical and <= 60s)
+              if (height > width && duration <= 60) {
+                console.log('Video qualifies as a YouTube Short');
+              } else {
+                console.log('Video does not meet YouTube Shorts criteria but will still be uploaded');
+              }
+            }
+          } catch (probeErr) {
+            console.warn('Could not determine video dimensions:', probeErr);
+          }
+          
           publishResult = await publishToYouTube({
             videoPath: content.video_url,
             accessToken: account.access_token,

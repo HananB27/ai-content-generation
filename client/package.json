@@ -5,7 +5,8 @@
   "dependencies": {
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
-    "react-scripts": "5.0.1"
+    "react-scripts": "5.0.1",
+    "googleapis": "^169.0.0"
   },
   "scripts": {
     "start": "react-scripts start",

@@ -7,10 +7,7 @@ function findFfmpegPath() {
   try {
     
     const possiblePaths = [
-      '/opt/homebrew/bin/ffmpeg', 
-      '/usr/local/bin/ffmpeg', 
-      '/usr/bin/ffmpeg', 
-      'ffmpeg' 
+      '/usr/bin/ffmpeg',
     ];
 
     for (const ffmpegPath of possiblePaths) {

@@ -9,13 +9,18 @@
     "client": "cd client && npm start",
     "install-all": "npm install && cd server && npm install && cd ../client && npm install"
   },
-  "keywords": ["ai", "content", "tiktok", "youtube"],
+  "keywords": [
+    "ai",
+    "content",
+    "tiktok",
+    "youtube"
+  ],
   "author": "",
   "license": "ISC",
   "devDependencies": {
     "concurrently": "^8.2.2"
+  },
+  "dependencies": {
+    "react-router-dom": "^7.11.0"
   }
 }
-
-
-

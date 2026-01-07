@@ -1,6 +1,6 @@
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:9999/api';
 
-const getAuthHeaders = () => {
+export const getAuthHeaders = () => {
   const token = localStorage.getItem('token');
   return {
     'Content-Type': 'application/json',

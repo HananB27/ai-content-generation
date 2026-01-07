@@ -93,7 +93,7 @@ router.get('/my-content', authenticateToken, async (req, res) => {
     const userId = req.user.userId;
 
     const result = await pool.query(
-      `SELECT id, prompt, generated_text, background_music, background_video,
+      `SELECT id, prompt, generated_text, background_music, background_video, video_url,
               status, created_at
        FROM content_generations
        WHERE user_id = $1

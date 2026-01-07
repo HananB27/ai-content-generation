@@ -32,15 +32,13 @@ function AccountSettings() {
   };
 
   const handleConnectYouTube = () => {
-    
-    alert(
-      'YouTube OAuth Integration:\n\n' +
-      '1. Create a project in Google Cloud Console\n' +
-      '2. Enable YouTube Data API v3\n' +
-      '3. Create OAuth 2.0 credentials\n' +
-      '4. Implement OAuth flow\n' +
-      '5. Call the connect endpoint with tokens'
-    );
+    try {
+      const { initiateYouTubeOAuth } = require('../utils/youtubeOAuth');
+      initiateYouTubeOAuth();
+    } catch (error) {
+      console.error('Error initiating YouTube OAuth:', error);
+      alert('Failed to initiate YouTube login. Please make sure YouTube API is configured properly.');
+    }
   };
 
   const handleDisconnect = async (platform) => {
